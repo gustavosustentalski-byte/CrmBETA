@@ -22,7 +22,7 @@
     "papaparse": "^5.5.3",
     "pdfjs-dist": "^5.4.296",
     "react": "^19.1.1",
-    "react-calendar": "^6.0.0",
+    "react-calendar": "^4.8.0",
     "react-dom": "^19.1.1",
     "xlsx": "^0.18.5"
   },
