@@ -1,6 +1,4 @@
-import "react-calendar/dist/Calendar.css";
 import React, { useEffect, useState } from "react";
-import Calendar from "react-calendar";
 import "./App.css";
 
 const COMPANY_LOGO_URL = "https://customer-assets.emergentagent.com/job_3258037a-50a8-438f-9b4c-f96f824ad6b7/artifacts/kmm9hes8_Asset%202%403x.png";
@@ -798,6 +796,7 @@ function StrategyArea({ list, setList, campaigns, query }) {
 }
 
 function AgendaArea({ items, setItems, clients, query }) {
+  const [loggedInUser] = useLocalState(LS_KEYS.loggedInUser, null);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [form, setForm] = useState({
     name:"", relatedPerson:"", relationNote:"", company:"", condominium:"", phone:"", email:"", datetime:"", contactType:"ligação", priority:"média", source:"", notes:""
@@ -905,7 +904,7 @@ function AgendaArea({ items, setItems, clients, query }) {
       </div>
 
       {showCalendarView && (
-        <CalendarView
+        <CustomCalendarView
           events={items}
           onClose={() => setShowCalendarView(false)}
         />
@@ -1210,20 +1209,20 @@ function FollowupArea({ items, setItems, agenda, clients, query, totals }) {
   );
 }
 
-function CalendarView({ events, onClose }) {
-  const [date, setDate] = useState(new Date());
+function CustomCalendarView({ events, onClose }) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedDayEvents, setSelectedDayEvents] = useState([]);
 
   useEffect(() => {
-    handleDateChange(date);
-  }, [date, events]);
+    updateSelectedDayEvents(selectedDate);
+  }, [selectedDate, events]);
 
-  const handleDateChange = (newDate) => {
-    setDate(newDate);
+  const updateSelectedDayEvents = (date) => {
     const dayEvents = events.filter(event => {
       if (!event.datetime) return false;
       const eventDate = new Date(event.datetime);
-      return eventDate.toDateString() === newDate.toDateString();
+      return eventDate.toDateString() === date.toDateString();
     }).sort((a, b) => {
       if (a.datetime && b.datetime) {
         return new Date(a.datetime).getTime() - new Date(b.datetime).getTime();
@@ -1233,56 +1232,129 @@ function CalendarView({ events, onClose }) {
     setSelectedDayEvents(dayEvents);
   };
 
-  const tileContent = ({ date, view }) => {
-    if (view === 'month') {
-      const dayHasEvents = events.some(event => {
-        if (!event.datetime) return false;
-        const eventDate = new Date(event.datetime);
-        return eventDate.toDateString() === date.toDateString();
-      });
-      return dayHasEvents ? (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column' }}>
-          <div style={{ backgroundColor: PALETTE.greenDark, borderRadius: '50%', width: 6, height: 6, marginTop: 4 }}></div>
-        </div>
-      ) : null;
-    }
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    return { daysInMonth, startingDayOfWeek, year, month };
   };
+
+  const hasEventsOnDate = (date) => {
+    return events.some(event => {
+      if (!event.datetime) return false;
+      const eventDate = new Date(event.datetime);
+      return eventDate.toDateString() === date.toDateString();
+    });
+  };
+
+  const changeMonth = (delta) => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(newDate.getMonth() + delta);
+    setCurrentDate(newDate);
+  };
+
+  const handleDateClick = (day) => {
+    const clickedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    setSelectedDate(clickedDate);
+  };
+
+  const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentDate);
+  const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+  const calendarDays = [];
+  for (let i = 0; i < startingDayOfWeek; i++) {
+    calendarDays.push(null);
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    calendarDays.push(day);
+  }
 
   return (
     <div style={modalStyles.backdrop} onClick={onClose}>
-      <div style={{...modalStyles.modal, display: "flex", flexDirection: "column", gap: 12}} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3>🗓️ Agenda Visual</h3>
+      <div style={{...modalStyles.modal, maxWidth: 1000}} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h3 style={{ margin: 0 }}>🗓️ Calendário de Eventos</h3>
           <button style={styles.smallBtn} onClick={onClose}>Fechar</button>
         </div>
         
-        <div style={{ display: "flex", gap: 20, flexWrap: "wrap", flex: 1 }}>
-          <div style={{ flex: 1, minWidth: 280, maxWidth: "100%" }}>
-            <Calendar
-              onChange={handleDateChange}
-              value={date}
-              locale="pt-BR"
-              calendarType="ISO 8601"
-              tileContent={tileContent}
-            />
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 320 }}>
+            <div style={calendarStyles.container}>
+              <div style={calendarStyles.header}>
+                <button onClick={() => changeMonth(-1)} style={calendarStyles.navButton}>‹</button>
+                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{monthNames[month]} {year}</h4>
+                <button onClick={() => changeMonth(1)} style={calendarStyles.navButton}>›</button>
+              </div>
+
+              <div style={calendarStyles.weekDays}>
+                {weekDays.map(day => (
+                  <div key={day} style={calendarStyles.weekDay}>{day}</div>
+                ))}
+              </div>
+
+              <div style={calendarStyles.daysGrid}>
+                {calendarDays.map((day, index) => {
+                  if (day === null) {
+                    return <div key={`empty-${index}`} style={calendarStyles.emptyDay}></div>;
+                  }
+                  
+                  const cellDate = new Date(year, month, day);
+                  const isToday = cellDate.toDateString() === new Date().toDateString();
+                  const isSelected = cellDate.toDateString() === selectedDate.toDateString();
+                  const hasEvents = hasEventsOnDate(cellDate);
+
+                  return (
+                    <div
+                      key={day}
+                      onClick={() => handleDateClick(day)}
+                      style={{
+                        ...calendarStyles.day,
+                        ...(isToday && calendarStyles.today),
+                        ...(isSelected && calendarStyles.selected),
+                      }}
+                    >
+                      <span style={{ position: 'relative', zIndex: 1 }}>{day}</span>
+                      {hasEvents && (
+                        <div style={calendarStyles.eventDot}></div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
-          <div style={{ flex: 1, minWidth: 280, maxHeight: 400, overflowY: "auto", padding: "0 5px" }}>
-            <h4>Eventos para {date.toLocaleDateString('pt-BR')}</h4>
+          <div style={{ flex: 1, minWidth: 320, maxHeight: 500, overflowY: "auto", padding: "0 10px" }}>
+            <h4 style={{ marginTop: 0, marginBottom: 12 }}>Eventos para {selectedDate.toLocaleDateString('pt-BR')}</h4>
             {selectedDayEvents.length === 0 ? (
               <div style={styles.empty}>Nenhum evento agendado para este dia.</div>
             ) : (
-              <div style={{ display: "grid", gap: 8 }}>
+              <div style={{ display: "grid", gap: 10 }}>
                 {selectedDayEvents.map((event) => (
                   <div key={event.id} style={styles.cardSmall}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <strong>{event.name}</strong>
-                      <span style={{ fontSize: 13, color: "#6b7280" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                      <strong style={{ fontSize: 15 }}>{event.name}</strong>
+                      <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 600 }}>
                         {event.datetime ? new Date(event.datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : "—"}
                       </span>
                     </div>
-                    <div style={{ fontSize: 13, color: "#374151" }}>{event.company || event.condominium || "—"}</div>
-                    <div style={{ fontSize: 13, color: "#6b7280" }}>{event.notes || "Sem notas"}</div>
+                    <div style={{ fontSize: 13, color: "#374151", marginBottom: 4 }}>
+                      📍 {event.company || event.condominium || "—"}
+                    </div>
+                    <div style={{ fontSize: 13, color: "#6b7280" }}>
+                      {event.contactType && <span>📞 {event.contactType} • </span>}
+                      {event.phone && <span>{event.phone}</span>}
+                    </div>
+                    {event.notes && (
+                      <div style={{ marginTop: 6, fontSize: 13, padding: 8, background: PALETTE.grayLight, borderRadius: 6 }}>
+                        {event.notes}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1514,6 +1586,110 @@ const followupTableStyles = {
   }
 };
 
+const calendarStyles = {
+  container: {
+    background: PALETTE.white,
+    borderRadius: 12,
+    padding: 16,
+    border: `1px solid ${PALETTE.grayMedium}`,
+    boxShadow: "0 4px 12px rgba(7,11,19,0.06)"
+  },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+    padding: "8px 0"
+  },
+  navButton: {
+    background: "transparent",
+    border: `1px solid ${PALETTE.grayMedium}`,
+    borderRadius: 8,
+    padding: "6px 12px",
+    cursor: "pointer",
+    fontSize: 18,
+    fontWeight: "bold",
+    color: PALETTE.blueDark
+  },
+  weekDays: {
+    display: "grid",
+    gridTemplateColumns: "repeat(7, 1fr)",
+    gap: 4,
+    marginBottom: 8
+  },
+  weekDay: {
+    textAlign: "center",
+    fontWeight: 700,
+    fontSize: 13,
+    color: PALETTE.text,
+    padding: 8
+  },
+  daysGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(7, 1fr)",
+    gap: 4
+  },
+  emptyDay: {
+    height: 50
+  },
+  day: {
+    height: 50,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontSize: 14,
+    position: "relative",
+    background: PALETTE.white,
+    border: `1px solid transparent`,
+    transition: "background-color 0.2s ease, border-color 0.2s ease"
+  },
+  today: {
+    background: PALETTE.grayLight,
+    fontWeight: 700
+  },
+  selected: {
+    background: PALETTE.greenDark,
+    color: PALETTE.white,
+    fontWeight: 700,
+    border: `1px solid ${PALETTE.greenDark}`
+  },
+  eventDot: {
+    width: 6,
+    height: 6,
+    borderRadius: "50%",
+    background: PALETTE.greenDark,
+    position: "absolute",
+    bottom: 6
+  }
+};
+
+const modalStyles = {
+  backdrop: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.6)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 60,
+    overflowY: "auto",
+  },
+  modal: {
+    width: "92%",
+    maxWidth: 980,
+    minHeight: "400px",
+    background: "#fff",
+    borderRadius: 12,
+    padding: 18,
+    boxShadow: "0 12px 40px rgba(7,11,19,0.25)",
+    maxHeight: "90vh",
+    overflowY: "auto",
+  }
+};
+
 function globalCss() {
   return `
     * { 
@@ -1552,94 +1728,6 @@ function globalCss() {
     @media (max-width: 768px) {
       .grid { grid-template-columns: 1fr !important; }
       input[placeholder], textarea[placeholder] { font-size: 14px; }
-      
-      .react-calendar {
-        width: 100% !important;
-        max-width: 100% !important;
-      }
-    }
-
-    .react-calendar {
-      border: 1px solid ${PALETTE.grayMedium};
-      border-radius: 12px;
-      font-family: inherit;
-      background: ${PALETTE.white};
-      padding: 8px;
-      width: 100%;
-      max-width: 350px;
-      box-shadow: 0 2px 8px rgba(7,11,19,0.04);
-    }
-
-    .react-calendar__navigation button {
-      color: ${PALETTE.blueDark};
-      font-weight: bold;
-      min-width: 44px;
-    }
-
-    .react-calendar__month-view__weekdays abbr {
-      text-decoration: none;
-      font-weight: bold;
-      color: ${PALETTE.text};
-    }
-
-    .react-calendar__tile {
-      padding: 8px 0;
-      height: 50px;
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      fontSize: 13px;
-    }
-
-    .react-calendar__tile--now {
-      background: ${PALETTE.grayLight};
-      border-radius: 6px;
-    }
-
-    .react-calendar__tile--active {
-      background: ${PALETTE.greenDark} !important;
-      color: ${PALETTE.white};
-      border-radius: 6px;
-    }
-    
-    .react-calendar__tile > div {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-        height: 100%;
-    }
-
-    .react-calendar__tile:enabled:hover,
-    .react-calendar__tile:enabled:focus {
-      background-color: ${PALETTE.grayMedium};
-      border-radius: 6px;
     }
   `;
 }
-
-const modalStyles = {
-  backdrop: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.6)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 60,
-    overflowY: "auto",
-  },
-  modal: {
-    width: "92%",
-    maxWidth: 980,
-    minHeight: "400px",
-    background: "#fff",
-    borderRadius: 12,
-    padding: 18,
-    boxShadow: "0 12px 40px rgba(7,11,19,0.25)",
-    maxHeight: "90vh",
-    overflowY: "auto",
-  }
-};
